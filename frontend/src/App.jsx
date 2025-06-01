@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+"use strict";
+
+import { useEffect, useRef, useState } from "react";
+import { PhoneIcon, PhoneSlashIcon } from "@phosphor-icons/react";
+import { Peer } from "peerjs";
 
 // establish connection to the backend
 const socket = new WebSocket("ws://localhost:3000/chat");
@@ -15,12 +19,38 @@ function App() {
 	const [msg, setMsg] = useState("");
 	const [messages, setMessages] = useState([]);
 	const [typing, setTyping] = useState(false);
+	const [stream, setStream] = useState(null);
+	const [activeCall, setActiveCall] = useState(false);
+
+	const myVideo = useRef(null);
+	const userVideo = useRef(null);
+	const connectionRef = useRef(null);
+
+	const [call, setCall] = useState({});
 
 	function handleKeyPress(e) {
 		if (e.key === "Enter") {
 			handleSend(e);
 		}
 	}
+
+	useEffect(() => {
+		navigator.mediaDevices
+			.getUserMedia({
+				audio: true,
+				video: true,
+			})
+			.then((currentStream) => {
+				setStream(currentStream);
+				if (myVideo.current) myVideo.current.srcObject = currentStream;
+				else console.log("is null");
+				// callUser();
+			})
+			.catch((err) => {
+				console.log(err);
+				console.log("is null");
+			});
+	}, []);
 
 	function handleSend(e) {
 		e.preventDefault();
@@ -71,11 +101,67 @@ function App() {
 						setTyping(false);
 					}, 1000);
 					break;
+				case "call-user":
+					setCall({
+						isRecevedCall: true,
+						from: parsed_msg.from,
+						name: parsed_msg.callerName,
+						signal: parsed_msg.signal,
+					});
+					break;
 			}
 		};
 
 		return () => clearTimeout(timeout);
-	}, [messages, typing]);
+	}, [messages, typing, stream, call]);
+
+	function answerCall() {
+		const peer = new Peer({
+			initiator: false,
+			trickle: false,
+			stream: stream,
+		});
+		peer.on("signal", (data) => {
+			socket.send(
+				JSON.stringify({
+					event: "answer-call",
+					signal: data,
+					to: call.from,
+				})
+			);
+		});
+		peer.on("stream", (currentStream) => {
+			userVideo.current.srcObject = currentStream;
+		});
+
+		peer.signal(call.signal);
+		connectionRef.current = peer;
+	}
+
+	function callUser() {
+		const peer = new Peer({
+			initiator: true,
+			trickle: false,
+			stream,
+		});
+		peer.on("signal", (data) => {
+			socket.send(
+				JSON.stringify({
+					event: "call-user",
+					userToCall: toClient,
+					signal: data,
+					from: clientID,
+					name: username,
+				})
+			);
+		});
+
+		peer.on("stream", (currentStream) => {
+			userVideo.current.srcObject = currentStream;
+		});
+
+		connectionRef.current = peer;
+	}
 
 	return (
 		<main className="flex flex-col items-center px-5 py-10">
@@ -127,7 +213,7 @@ function App() {
 										setTempusername((prev) => "@" + prev);
 										setUsername("@" + tempusername);
 									}}
-									className="bg-green-500 cursor-pointer hover:bg-green-700 duration-300 px-3 rounded-xl text-white"
+									className="bg-green-500 cursor-pointer hover:bg-green-700 duration-300 px-5 rounded-xl text-white"
 								>
 									Done
 								</button>
@@ -145,8 +231,31 @@ function App() {
 								}}
 							/>
 						</div>
+						<button
+							className={`flex items-center justify-center p-4 ${
+								activeCall ? "bg-red-600" : "bg-blue-600"
+							} rounded-xl cursor-pointer hover:bg-blue-800 duration-200 ring-2 ring-blue-400 text-white`}
+							onClick={(e) => {
+								e.preventDefault();
+								if (!toClient || !username) return;
+								navigator.mediaDevices
+									.getUserMedia({ audio: true, video: true })
+									.then((currentStream) => {
+										setStream(currentStream);
+										myVideo.current.srcObject =
+											currentStream;
+										// callUser();
+									});
+							}}
+						>
+							{activeCall ? (
+								<PhoneSlashIcon size={32} />
+							) : (
+								<PhoneIcon size={32} />
+							)}
+						</button>
 					</div>
-					<div className="relative min-h-200 max-h-200 overflow-scroll ring-2 ring-gray-200 rounded-xl p-5 flex flex-col gap-2 w-full justify-end">
+					<div className="relative min-h-120 max-h-120 overflow-scroll ring-2 ring-gray-200 rounded-xl p-5 flex flex-col gap-2 w-full justify-end">
 						{messages.map((m, i) => {
 							return (
 								<div
@@ -212,6 +321,22 @@ function App() {
 						>
 							Send
 						</button>
+					</div>
+					<div className="flex gap-10 w-full">
+						<video
+							className="bg-gray-100 w-full"
+							ref={myVideo}
+							autoPlay
+							playsInline
+							muted
+						/>
+						<video
+							className="bg-gray-100 w-full"
+							ref={userVideo}
+							autoPlay
+							playsInline
+							muted
+						/>
 					</div>
 				</div>
 			</div>
