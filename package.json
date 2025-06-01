@@ -1,0 +1,5 @@
+{
+	"scripts": {
+		"start": "conc \"npm run dev --prefix ./frontend\" \"npm run start --prefix ./backend\" " 
+	}
+}
