@@ -2,7 +2,6 @@ import Fastify from "fastify";
 import fastifyWebsocket from "@fastify/websocket";
 import fastifyCors from "@fastify/cors";
 import { randomUUID } from "crypto";
-import { parse } from "path";
 
 const fastify = Fastify({
 	logger: {
@@ -59,6 +58,17 @@ fastify.register((fastify) => {
 						})
 					);
 					break;
+				case "start-call":
+					console.log("Received Something");
+					console.log(parsed);
+					toClient.send(
+						JSON.stringify({
+							event: "receive-call",
+							sender: parsed.sender,
+							senderId: parsed.message,
+							from: clientId,
+						})
+					);
 			}
 		});
 

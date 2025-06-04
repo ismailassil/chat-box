@@ -1,6 +1,6 @@
 "use strict";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PhoneIcon, PhoneSlashIcon } from "@phosphor-icons/react";
 import { Peer } from "peerjs";
 
@@ -19,14 +19,23 @@ function App() {
 	const [msg, setMsg] = useState("");
 	const [messages, setMessages] = useState([]);
 	const [typing, setTyping] = useState(false);
-	const [stream, setStream] = useState(null);
+	// const [stream, setStream] = useState(null);
 	const [activeCall, setActiveCall] = useState(false);
+	const containerRef = useRef(null);
+	const peerServer = useRef(null);
+	const [peerId, setPeerId] = useState("");
 
-	const myVideo = useRef(null);
-	const userVideo = useRef(null);
-	const connectionRef = useRef(null);
+	const localVideo = useRef(null);
+	const remoteVideo = useRef(null);
 
-	const [call, setCall] = useState({});
+	// const [call, setCall] = useState({});
+
+	useEffect(() => {
+		peerServer.current = new Peer();
+		peerServer.current.on("open", (id) => {
+			setPeerId(id);
+		});
+	}, []);
 
 	function handleKeyPress(e) {
 		if (e.key === "Enter") {
@@ -35,20 +44,33 @@ function App() {
 	}
 
 	useEffect(() => {
-		navigator.mediaDevices
+		function handleClick(event) {
+			if (
+				containerRef.current &&
+				!containerRef.current.contains(event.target)
+			) {
+				setActiveCall(!activeCall);
+			}
+		}
+		document.addEventListener("mousedown", handleClick);
+
+		return () => document.removeEventListener("mousedown", handleClick);
+	}, [activeCall, setActiveCall]);
+
+	const setupCall = useCallback(async () => {
+		return navigator.mediaDevices
 			.getUserMedia({
 				audio: true,
 				video: true,
 			})
 			.then((currentStream) => {
-				setStream(currentStream);
-				if (myVideo.current) myVideo.current.srcObject = currentStream;
-				else console.log("is null");
-				// callUser();
+				if (localVideo.current)
+					localVideo.current.srcObject = currentStream;
+				return currentStream;
 			})
 			.catch((err) => {
-				console.log(err);
-				console.log("is null");
+				console.error(err);
+				throw err;
 			});
 	}, []);
 
@@ -82,7 +104,6 @@ function App() {
 			switch (mevent) {
 				case "welcome":
 					setClientID(parsed_msg.id);
-					console.log(parsed_msg.message);
 					break;
 				case "private-message":
 					setMessages([
@@ -101,70 +122,50 @@ function App() {
 						setTyping(false);
 					}, 1000);
 					break;
-				case "call-user":
-					setCall({
-						isRecevedCall: true,
-						from: parsed_msg.from,
-						name: parsed_msg.callerName,
-						signal: parsed_msg.signal,
-					});
+				case "receive-call": {
+					setupCall()
+						.then((currentStream) => {
+							setActiveCall(true);
+							const call = peerServer.current.call(
+								parsed_msg.senderId,
+								currentStream
+							);
+							call.on("stream", (remoteStream) => {
+								if (remoteVideo.current)
+									remoteVideo.current.srcObject =
+										remoteStream;
+							});
+						})
+						.catch((err) => {
+							console.error(err);
+						});
 					break;
+				}
 			}
 		};
 
 		return () => clearTimeout(timeout);
-	}, [messages, typing, stream, call]);
+	}, [messages, typing, setupCall]);
 
-	function answerCall() {
-		const peer = new Peer({
-			initiator: false,
-			trickle: false,
-			stream: stream,
-		});
-		peer.on("signal", (data) => {
-			socket.send(
-				JSON.stringify({
-					event: "answer-call",
-					signal: data,
-					to: call.from,
-				})
-			);
-		});
-		peer.on("stream", (currentStream) => {
-			userVideo.current.srcObject = currentStream;
-		});
+	useEffect(() => {
+		if (!peerServer.current) return;
+		peerServer.current.on("call", (call) => {
+			setupCall().then((currentStream) => {
+				if (localVideo.current)
+					localVideo.current.srcObject = currentStream;
+				call.answer(currentStream);
 
-		peer.signal(call.signal);
-		connectionRef.current = peer;
-	}
-
-	function callUser() {
-		const peer = new Peer({
-			initiator: true,
-			trickle: false,
-			stream,
+				call.on("stream", (remoteStream) => {
+					if (remoteVideo.current) {
+						remoteVideo.current.srcObject = remoteStream;
+					}
+				});
+			});
 		});
-		peer.on("signal", (data) => {
-			socket.send(
-				JSON.stringify({
-					event: "call-user",
-					userToCall: toClient,
-					signal: data,
-					from: clientID,
-					name: username,
-				})
-			);
-		});
-
-		peer.on("stream", (currentStream) => {
-			userVideo.current.srcObject = currentStream;
-		});
-
-		connectionRef.current = peer;
-	}
+	}, [setupCall]);
 
 	return (
-		<main className="flex flex-col items-center px-5 py-10">
+		<main className="w-full h-full flex flex-col items-center px-5 py-10">
 			<div className="w-full max-w-250">
 				<div className="ring-5 ring-blue-200 bg-blue-600 text-white rounded-2xl w-full flex-1/2">
 					<div className="text-2xl font-bold cfont uppercase p-5">
@@ -237,15 +238,19 @@ function App() {
 							} rounded-xl cursor-pointer hover:bg-blue-800 duration-200 ring-2 ring-blue-400 text-white`}
 							onClick={(e) => {
 								e.preventDefault();
-								if (!toClient || !username) return;
-								navigator.mediaDevices
-									.getUserMedia({ audio: true, video: true })
-									.then((currentStream) => {
-										setStream(currentStream);
-										myVideo.current.srcObject =
-											currentStream;
-										// callUser();
-									});
+								if (!toClient || !username) {
+									return;
+								}
+								socket.send(
+									JSON.stringify({
+										event: "start-call",
+										message: peerId,
+										to: toClient,
+										sender: username,
+									})
+								);
+								setupCall();
+								setActiveCall(true);
 							}}
 						>
 							{activeCall ? (
@@ -322,24 +327,43 @@ function App() {
 							Send
 						</button>
 					</div>
-					<div className="flex gap-10 w-full">
-						<video
-							className="bg-gray-100 w-full"
-							ref={myVideo}
-							autoPlay
-							playsInline
-							muted
-						/>
-						<video
-							className="bg-gray-100 w-full"
-							ref={userVideo}
-							autoPlay
-							playsInline
-							muted
-						/>
-					</div>
 				</div>
 			</div>
+			{activeCall ? (
+				<div className="absolute size-full top-0 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-xl flex gap-5 flex-col items-center justify-center ">
+					<div
+						ref={containerRef}
+						className="grid grid-cols-1 size-[80%] grid-rows-2 gap-3 bg-white p-10 rounded-2xl"
+					>
+						<video
+							className="bg-gray-100 size-full rounded-2xl"
+							ref={localVideo}
+							autoPlay
+							playsInline
+							muted
+						/>
+						<video
+							className="bg-gray-100 size-full rounded-2xl"
+							ref={remoteVideo}
+							autoPlay
+							playsInline
+							muted
+						/>
+						<button
+							onClick={(e) => {
+								e.preventDefault();
+								peerServer.current.disconnect();
+								localVideo.current = null;
+								remoteVideo.current = null;
+								setActiveCall(false);
+							}}
+							className="w-full text-center bg-red-500 hover:bg-red-600 duration-300 cursor-pointer p-3 text-white rounded-2xl"
+						>
+							End Call
+						</button>
+					</div>
+				</div>
+			) : null}
 		</main>
 	);
 }
