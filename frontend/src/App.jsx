@@ -26,6 +26,7 @@ function App() {
 	// Video Call Elements
 	const [activeCall, setActiveCall] = useState(false);
 	const peerServer = useRef(null);
+	const call = useRef(null);
 
 	const localVideo = useRef(null);
 	const remoteVideo = useRef(null);
@@ -48,12 +49,12 @@ function App() {
 	}, []);
 
 	const closeConnection = useCallback(() => {
-		peerServer.current.destroy();
+		if (call.current) call.current.close();
 		localVideo.current.srcObject.getTracks().forEach(function (track) {
 			track.stop();
 		});
 		setActiveCall(false);
-	}, [peerServer, localVideo, setActiveCall]);
+	}, [call, localVideo, setActiveCall]);
 
 	useEffect(() => {
 		let timeout;
@@ -87,11 +88,12 @@ function App() {
 					setToClient(parsed_msg.from);
 					setupCall()
 						.then((currentStream) => {
-							const call = peerServer.current.call(
+							const currentCall = peerServer.current.call(
 								parsed_msg.senderId,
 								currentStream
 							);
-							call.on("stream", (remoteStream) => {
+							call.current = currentCall;
+							currentCall.on("stream", (remoteStream) => {
 								if (remoteVideo.current)
 									remoteVideo.current.srcObject =
 										remoteStream;
