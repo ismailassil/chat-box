@@ -47,6 +47,14 @@ function App() {
 			});
 	}, []);
 
+	const closeConnection = useCallback(() => {
+		peerServer.current.destroy();
+		localVideo.current.srcObject.getTracks().forEach(function (track) {
+			track.stop();
+		});
+		setActiveCall(false);
+	}, [peerServer, localVideo, setActiveCall]);
+
 	useEffect(() => {
 		let timeout;
 
@@ -75,9 +83,10 @@ function App() {
 					}, 1000);
 					break;
 				case "receive-call": {
+					setActiveCall(true);
+					setToClient(parsed_msg.from);
 					setupCall()
 						.then((currentStream) => {
-							setActiveCall(true);
 							const call = peerServer.current.call(
 								parsed_msg.senderId,
 								currentStream
@@ -93,11 +102,14 @@ function App() {
 						});
 					break;
 				}
+				case "close-connection":
+					closeConnection();
+					break;
 			}
 		};
 
 		return () => clearTimeout(timeout);
-	}, [messages, typing, setupCall]);
+	}, [messages, typing, setupCall, closeConnection]);
 
 	useEffect(() => {
 		if (!peerServer.current) return;
@@ -163,10 +175,12 @@ function App() {
 			</div>
 			<ActiveVideoCall
 				activeCall={activeCall}
-				setActiveCall={setActiveCall}
-				peerServer={peerServer}
 				localVideo={localVideo}
 				remoteVideo={remoteVideo}
+				closeConnection={closeConnection}
+				socket={socket}
+				toClient={toClient}
+				clientID={clientID}
 			/>
 		</main>
 	);

@@ -2,10 +2,12 @@ import { useEffect, useRef } from "react";
 
 function ActiveVideoCall({
 	activeCall,
-	setActiveCall,
 	localVideo,
 	remoteVideo,
-	peerServer,
+	closeConnection,
+	socket,
+	toClient,
+	clientID,
 }) {
 	const containerRef = useRef(null);
 
@@ -15,17 +17,20 @@ function ActiveVideoCall({
 				containerRef.current &&
 				!containerRef.current.contains(event.target)
 			) {
-				peerServer.close();
-				localVideo.current.getTracks().forEach(function (track) {
-					track.stop();
-				});
-				setActiveCall(!activeCall);
+				socket.send(
+					JSON.stringify({
+						event: "close-connection",
+						to: toClient,
+						from: clientID,
+					})
+				);
+				closeConnection();
 			}
 		}
 		document.addEventListener("mousedown", handleClick);
 
 		return () => document.removeEventListener("mousedown", handleClick);
-	}, [activeCall, setActiveCall, peerServer, localVideo]);
+	}, [closeConnection, socket, toClient, clientID]);
 
 	return (
 		<>
@@ -52,13 +57,13 @@ function ActiveVideoCall({
 						<button
 							onClick={(e) => {
 								e.preventDefault();
-								peerServer.close();
-								localVideo.current
-									.getTracks()
-									.forEach(function (track) {
-										track.stop();
-									});
-								setActiveCall(false);
+								socket.send(
+									JSON.stringify({
+										event: "close-connection",
+										to: toClient,
+									})
+								);
+								closeConnection();
 							}}
 							className="w-full text-center bg-red-500 hover:bg-red-600 duration-300 cursor-pointer p-3 text-white rounded-2xl"
 						>

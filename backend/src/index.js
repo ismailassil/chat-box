@@ -35,7 +35,7 @@ fastify.register((fastify) => {
 			const parsed = JSON.parse(message.toString());
 			const toClient = clients.get(parsed.to);
 			if (!toClient) {
-				console.log("Client NOT FOUND");
+				console.log("Client Not Found");
 				return;
 			}
 			switch (parsed.event) {
@@ -59,14 +59,20 @@ fastify.register((fastify) => {
 					);
 					break;
 				case "start-call":
-					console.log("Received Something");
-					console.log(parsed);
 					toClient.send(
 						JSON.stringify({
 							event: "receive-call",
 							sender: parsed.sender,
 							senderId: parsed.message,
 							from: clientId,
+						})
+					);
+					break;
+				case "close-connection":
+					toClient.send(
+						JSON.stringify({
+							event: "close-connection",
+							sender: parsed.from,
 						})
 					);
 			}

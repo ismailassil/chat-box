@@ -18,7 +18,7 @@ function VideoCall({
 		peerServer.current.on("open", (id) => {
 			setPeerId(id);
 		});
-	}, []);
+	}, [peerServer]);
 
 	return (
 		<button
