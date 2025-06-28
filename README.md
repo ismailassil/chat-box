@@ -32,13 +32,13 @@ cd chat-box
 npm install
 ```
 
-Start the dev server:
+3. Start the dev server:
 
 ```bash
 npm run dev
 ```
 
-Open your browser and go to:
+4. Open your browser and go to:
 
 ```
     http://localhost:3000
