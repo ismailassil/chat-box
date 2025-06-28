@@ -46,8 +46,6 @@ npm run dev
 
 💡 How It Works
 
-    The frontend (Next.js) connects to the Fastify backend through WebSockets.
-
-    The server listens for messages and broadcasts them to all connected clients.
-
-    The UI is kept minimal and responsive for a distraction-free chatting experience.
+- The frontend (Next.js) connects to the Fastify backend through WebSockets.
+- The server listens for messages and broadcasts them to all connected clients.
+- The UI is kept minimal and responsive for a distraction-free chatting experience.
