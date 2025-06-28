@@ -21,10 +21,10 @@ A minimalist real-time chat application featuring a clean UI and seamless messag
 
 ### Install & Run
 1. Clone the repo:
-   ```bash
-   git clone https://github.com/ismailassil/chat-box.git
-   cd chat-box
-   ```
+```bash
+git clone https://github.com/ismailassil/chat-box.git
+cd chat-box
+```
 
 2. Install dependencies:
 
